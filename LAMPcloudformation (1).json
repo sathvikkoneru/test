@@ -1,0 +1,294 @@
+{	
+   "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+        }
+	},
+	"Resources": {
+		"sathvikVPC": {
+			"Type": "AWS::EC2::VPC",
+			"Properties": {
+				"CidrBlock": "10.0.0.0/16",
+				"EnableDnsSupport": "false",
+				"EnableDnsHostnames": "false",
+				"InstanceTenancy": "default"
+			}
+		},
+		"sathvikPublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": { "Ref": "sathvikVPC" },
+                "AvailabilityZone": "us-east-1a",
+                "CidrBlock": "10.0.0.0/24",
+                "MapPublicIpOnLaunch": "true"
+            }
+        },
+        "sathvikPublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": { "Ref": "sathvikVPC" },
+                "AvailabilityZone": "us-east-1b",
+                "CidrBlock": "10.0.1.0/24",
+                "MapPublicIpOnLaunch": "true"
+            }
+        },
+        "sathvikPrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": { "Ref": "sathvikVPC" },
+                "AvailabilityZone": "us-east-1a",
+                "CidrBlock": "10.0.2.0/24",
+                "MapPublicIpOnLaunch": "true"
+            }
+        },
+        "sathvikPrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": { "Ref": "sathvikVPC" },
+                "AvailabilityZone": "us-east-1b",
+                "CidrBlock": "10.0.3.0/24",
+                "MapPublicIpOnLaunch": "true"
+            }
+        },
+        "sathvikIGW": {
+				"Type": "AWS::EC2::InternetGateway"        
+        },
+        "AttachmentGateway": {
+        		"Type": "AWS::EC2::VPCGatewayAttachment",
+				"Properties": {
+					"VpcId": { "Ref": "sathvikVPC" },
+					"InternetGatewayId": { "Ref": "sathvikIGW" } 			
+				}
+        },
+        "sathvikPublicRouteTable":{
+				"Type": "AWS::EC2::RouteTable", 
+				"Properties":{
+					"VpcId": { "Ref": "sathvikVPC" }				
+				}       
+        },
+        "PublicRoute": {
+				"Type": "AWS::EC2::Route",
+				"Properties":{			
+					"RouteTableId": { "Ref": "sathvikPublicRouteTable" },
+					"DestinationCidrBlock": "0.0.0.0/0",
+					"GatewayId": { "Ref": "sathvikIGW" }	
+				} 
+        },
+        "PublicRTAssoc1": {
+        		"Type": "AWS::EC2::SubnetRouteTableAssociation",
+        		"Properties": {
+        			"SubnetId": { "Ref": "sathvikPublicSubnet1" },
+        			"RouteTableId": { "Ref": "sathvikPublicRouteTable" }
+        		}
+        },
+        "PublicRTAssoc2": {
+        		"Type": "AWS::EC2::SubnetRouteTableAssociation",
+        		"Properties": {
+        			"SubnetId": { "Ref": "sathvikPublicSubnet2" },
+        			"RouteTableId": { "Ref": "sathvikPublicRouteTable" }
+        		}
+        },
+        "NATIP":{
+        		"Type": "AWS::EC2::EIP",
+        		"Properties": { "Domain": "vpc" }
+        },
+        "sathvikNAT": {
+        		"DependsOn": "AttachmentGateway",
+				"Type": "AWS::EC2::NatGateway",
+				"Properties": {
+					"AllocationId": { "Fn::GetAtt" : ["NATIP", "AllocationId"] },
+					"SubnetId": { "Ref": "sathvikPublicSubnet1" }				
+				}        
+        },
+        "sathvikPrivateRouteTable":{
+				"Type": "AWS::EC2::RouteTable", 
+				"Properties":{
+					"VpcId": { "Ref": "sathvikVPC" }				
+				}       
+        },
+        "PrivateRoute": {
+				"Type": "AWS::EC2::Route",
+				"Properties":{			
+					"RouteTableId": { "Ref": "sathvikPrivateRouteTable"},
+					"DestinationCidrBlock": "0.0.0.0/0",
+					"NatGatewayId": { "Ref": "sathvikNAT" }	
+				} 
+        },
+        "PrivateRTAssoc1": {
+        		"Type": "AWS::EC2::SubnetRouteTableAssociation",
+        		"Properties": {
+        			"SubnetId": { "Ref": "sathvikPrivateSubnet1"},
+        			"RouteTableId": { "Ref": "sathvikPrivateRouteTable" }
+        		}
+        },
+        "PrivateRTAssoc2": {
+        		"Type": "AWS::EC2::SubnetRouteTableAssociation",
+        		"Properties": {
+        			"SubnetId": { "Ref": "sathvikPrivateSubnet2"},
+        			"RouteTableId": { "Ref": "sathvikPrivateRouteTable" }
+        		}
+        },
+        "sathvikSG":{
+				"Type": "AWS::EC2::SecurityGroup",
+				"Properties": {
+					"GroupDescription": "Allow ssh, sathvikSG, https to client host",
+					"VpcId": { "Ref": "sathvikVPC" },
+					"SecurityGroupIngress": [{
+							"IpProtocol": "tcp",
+							"FromPort": "22",
+							"ToPort": "22",
+							"CidrIp": "0.0.0.0/0"					
+					}],
+					"SecurityGroupEgress": [{
+							"IpProtocol": "-1",
+							"FromPort": "-1",
+							"ToPort": "-1",
+							"CidrIp": "0.0.0.0/0"					
+					}]				
+				}        
+        },
+        "sathvikhttp": {
+        		"Type": "AWS::EC2::SecurityGroupIngress",
+        		"Properties":
+        			{
+        				"GroupId": { "Ref": "sathvikSG" },
+        				"IpProtocol": "tcp",
+        				"FromPort": "80",
+        				"ToPort": "80",
+        				"CidrIp": "0.0.0.0/0"
+        			} 			
+        },
+        "sathvikhttps": {
+				"Type": "AWS::EC2::SecurityGroupIngress",
+				"Properties":
+					{
+        				"GroupId": { "Ref": "sathvikSG" },
+        				"IpProtocol": "tcp",
+        				"FromPort": "443",
+        				"ToPort": "443",
+        				"CidrIp": "0.0.0.0/0"
+        			}           
+        },        
+        "Bitnami": {
+				"Type": "AWS::EC2::Instance",
+				"Properties": {
+					"AvailabilityZone": "us-east-1a",
+					"InstanceType": "t2.micro",
+					"ImageId": "ami-89f68a9f",
+					"KeyName": { "Ref" : "KeyName" },
+					"NetworkInterfaces": [{
+							"AssociatePublicIpAddress": "true",
+							"DeviceIndex": "0",
+							"GroupSet": [{ "Ref": "sathvikSG" }],
+							"SubnetId": { "Ref":"sathvikPublicSubnet1" }
+					}],
+					"BlockDeviceMappings": [{
+							"DeviceName": "/dev/sdm",
+							"Ebs": {
+								"VolumeType": "io1",
+								"Iops": "100",
+								"DeleteOnTermination": "false",
+								"VolumeSize": "8"							
+							}						
+					}]				
+				}        
+        },
+        "LAMPInstance": {
+				"Type": "AWS::EC2::Instance",
+				"Metadata": {
+					"AWS::CloudFormation::Init": {
+						"configSets": {
+							"InstallAndRun": [ "Install","Configure" ]						
+						},						
+						"Install":{
+							"packages": {
+								"yum": {
+									"mysql"			: [],
+									"mysql-server"	: [],
+									"mysql-libs"	: [],
+									"httpd"			: [],
+									"php"				: [],
+									"php-mysql"		: [],
+									"git"				: []						
+								}
+							},					
+							"files" : {
+								"/etc/cfn/cfn-hup.conf" : {
+									"content" : { "Fn::Join" : ["", [
+										"[main]\n",
+										"stack=", { "Ref" : "AWS::StackId" }, "\n",
+										"region=", { "Ref" : "AWS::Region" }, "\n",
+										"interval=5", "\n"
+									]]},
+									"mode": "000400",
+									"owner": "root",
+									"group": "root"
+								},
+								"/etc/cfn/hooks.d/cfn-auto-reloader.conf" : {
+									"content": { "Fn::Join" : ["", [
+										"[cfn-auto-reloader-hook]\n",
+										"triggers=post.update\n",
+										"path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init\n",
+										"action=/opt/aws/bin/cfn-init -v ",
+										" --stack ", { "Ref" : "AWS::StackName" },
+										" --resource WebServerInstance ",
+										" --configsets InstallAndRun ",
+										" --region ", { "Ref" : "AWS::Region" }, "\n",
+										"runas=root\n"
+									]]}
+								}
+							},			
+							"services": {
+								"sysvinit": {
+									"mysqld": { "enabled": "true", "ensureRunning": "true" },
+									"httpd": { "enabled": "true", "ensureRunning": "true" },		
+									"cfn-hup": { "enabled": "true", "ensureRunning": "true" },
+									"files" : ["/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf"]
+								}				
+							}					
+						}	
+					}
+				},	
+				"Properties": {
+					"AvailabilityZone": "us-east-1a",
+					"InstanceType": "t2.micro",
+					"ImageId": "ami-c58c1dd3",
+					"KeyName": { "Ref" : "KeyName" },
+					"UserData": { "Fn::Base64" : { "Fn::Join" : ["", [
+						"#!/bin/bash -xe\n",
+						"yum update -y aws-cfn-bootstrap\n",
+						"# Install the files and packages from the metadata\n",
+						"/opt/aws/bin/cfn-init -v ",
+						"--stack ", { "Ref" : "AWS::StackName" },
+						"--resource WebServerInstance ",
+						"--configsets InstallAndRun ",
+						"--region ", { "Ref" : "AWS::Region" }, "\n",
+						"# Signal the status from cfn-init\n",
+						"/opt/aws/bin/cfn-signal -e $? ",
+						"--stack ", { "Ref" : "AWS::StackName" },
+						"--resource WebServerInstance ",
+						"--region ", { "Ref" : "AWS::Region" }, "\n"
+					]]}},
+					"NetworkInterfaces": [{
+							"AssociatePublicIpAddress": "true",
+							"DeviceIndex": "0",
+							"GroupSet": [{ "Ref": "sathvikSG" }],
+							"SubnetId": { "Ref":"sathvikPublicSubnet1" }
+					}],
+					"BlockDeviceMappings": [{
+							"DeviceName": "/dev/sdm",
+							"Ebs": {
+								"VolumeType": "io1",
+								"Iops": "100",
+								"DeleteOnTermination": "false",
+								"VolumeSize": "8"							
+							 }						
+					}]				
+				}        
+        }      
+	}
+}
+
